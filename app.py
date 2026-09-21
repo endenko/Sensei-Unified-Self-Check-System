@@ -265,8 +265,92 @@ class GeometryGenerator(ProblemGenerator):
             )
         
         else:
-            # Default triangle area
-            return self._generate_geometry("triangle_area", difficulty, idx)
+            raise ValueError(f"Unknown geometry topic: {topic}")
+
+# =====================
+# BFS/String Puzzle Generator
+# =====================
+
+class BFSGenerator(ProblemGenerator):
+    """Generator for BFS 1800-style string puzzles and graph traversal problems"""
+    
+    def __init__(self):
+        self.string_operations = ['reverse', 'rotate', 'swap', 'insert', 'delete']
+    
+    def generate(self, topic: str, difficulty: Difficulty, count: int = 1) -> List[Problem]:
+        problems = []
+        for i in range(count):
+            problems.append(self._generate_bfs_problem(topic, difficulty, i))
+        return problems
+    
+    def validate(self, answer: Any, problem: Problem) -> bool:
+        # For string problems, compare normalized answers
+        try:
+            return str(answer).strip().lower() == str(problem.correct_answer).strip().lower()
+        except:
+            return False
+    
+    def _generate_bfs_problem(self, topic: str, difficulty: Difficulty, idx: int) -> Problem:
+        if topic == "string":
+            return self._generate_string_problem(difficulty, idx)
+        else:
+            return self._generate_string_problem(difficulty, idx)
+    
+    def _generate_string_problem(self, difficulty: Difficulty, idx: int) -> Problem:
+        methods = {
+            'easy': (1, 3),
+            'medium': (3, 6),
+            'hard': (5, 10)
+        }
+        min_len, max_len = methods[difficulty.value]
+        
+        # Generate random string
+        import string
+        chars = string.ascii_lowercase
+        s = ''.join(random.choice(chars) for _ in range(random.randint(min_len, max_len)))
+        
+        operations = random.choice(self.string_operations)
+        
+        if operations == 'reverse':
+            result = s[::-1]
+            question = f"Cho chuỗi S = \"{s}\". Hãy xuất chuỗi S phản xuất (đảo ngược thứ tự các ký tự)."
+            answer = result
+            explanation = f"Chuỗi phản xuất của \"{s}\" là \"{result}\""
+            
+        elif operations == 'rotate':
+            k = random.randint(1, len(s)-1) if len(s) > 1 else 1
+            result = s[k:] + s[:k]
+            question = f"Cho chuỗi S = \"{s}\". Hãy xoay trói chuỗi bằng cách đưa k ký tự đầu tiên về cuối, trong đó k = {k}."
+            answer = result
+            explanation = f"Sau khi xoay, chuỗi thành \"{result}\""
+            
+        elif operations == 'swap':
+            if len(s) >= 2:
+                i, j = random.sample(range(len(s)), 2)
+                s_list = list(s)
+                s_list[i], s_list[j] = s_list[j], s_list[i]
+                result = ''.join(s_list)
+                question = f"Cho chuỗi S = \"{s}\". Hãy đổi chỗ ký tự tại vị trí {i} và {j} (sử dụng chỉ số bắt đầu từ 0)."
+                answer = result
+                explanation = f"Sau khi đổi chỗ, chuỗi thành \"{result}\""
+            else:
+                return self._generate_string_problem(difficulty, idx)
+                
+        else:
+            result = s + random.choice(chars)
+            question = f"Cho chuỗi S = \"{s}\". Hãy thêm một ký tự ngẫu nhiên vào cuối chuỗi."
+            answer = result
+            explanation = f"Chuỗi mới là \"{result}\""
+        
+        return Problem(
+            id=f"bfs_string_{difficulty.value}_{idx}_{hashlib.md5(s.encode()).hexdigest()[:8]}",
+            type=ProblemType.SHORT_ANSWER,
+            difficulty=difficulty,
+            question=question,
+            correct_answer=answer,
+            explanation=explanation,
+            tags=["bfs", "string", difficulty.value]
+        )
 
 # =====================
 # Problem Generator Registry
@@ -296,6 +380,7 @@ registry = GeneratorRegistry()
 # Register default generators
 registry.register("algebra", AlgebraGenerator())
 registry.register("geometry", GeometryGenerator())
+registry.register("bfs", BFSGenerator())
 
 # =====================
 # API Request/Response Models
@@ -428,25 +513,21 @@ def cli():
     if args.command == "generate":
         difficulty = Difficulty(args.difficulty)
         
-        # Try algebra generator first, then geometry
-        gen = registry.get_generator("algebra")
-        if gen:
-            try:
-                problems = gen.generate(args.topic, difficulty, args.count)
-            except ValueError:
-                gen = registry.get_generator("geometry")
-                if gen:
-                    problems = gen.generate(args.topic.lower(), difficulty, args.count)
-                else:
-                    print("No generator available for this topic")
-                    return
-        else:
-            gen = registry.get_generator("geometry")
+        # Try each generator in order
+        generators = ["algebra", "geometry", "bfs"]
+        problems = None
+        for gen_name in generators:
+            gen = registry.get_generator(gen_name)
             if gen:
-                problems = gen.generate(args.topic.lower(), difficulty, args.count)
-            else:
-                print("No generator available")
-                return
+                try:
+                    problems = gen.generate(args.topic.lower(), difficulty, args.count)
+                    break
+                except ValueError:
+                    continue
+        
+        if not problems:
+            print(f"No generator available for topic: {args.topic}")
+            return
         
         for p in problems:
             print(f"\n--- Problem: {p.id} ---")
