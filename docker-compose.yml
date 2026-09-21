@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  sensei-app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - API_KEY=${API_KEY}
+      - API_ENDPOINT=${API_ENDPOINT}
+    restart: unless-stopped
+
+volumes:
+  - ./data:/app/data
